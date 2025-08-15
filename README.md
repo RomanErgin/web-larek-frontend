@@ -85,9 +85,9 @@ API_ORIGIN="https://your.api.host" npm run start
   - `AppState` — агрегатор общего состояния (композиция моделей), координация межмодульных событий.
 - **Представления (UI-компоненты)**
   - `GalleryView` — отрисовка каталога (сеткой), делегирует карточки `CardView`.
-  - `CardView` — карточка товара (в каталоге и в предпросмотре), эмитит выбор/добавление в корзину.
+  - `CardView` — карточка товара (в каталоге и в предпросмотре), эмитит выбор/добавление в корзину; также используется для отображения элементов корзины в компактном виде и в этом контексте эмитит событие удаления (`basket:remove`).
   - `ModalView` — модальное окно (контейнер), управление открытием/закрытием, рендер произвольного контента.
-  - `BasketView` — содержимое корзины, список позиций, удаление, кнопка «Оформить».
+  - `BasketView` — содержимое корзины: отображение списка позиций, итоговой суммы и кнопки «Оформить». Удаление конкретного элемента инициирует `CardView` каждого элемента.
   - `OrderFormView` — форма адреса и способа оплаты, валидация и состояние кнопки «Далее».
   - `ContactsFormView` — форма контактов (email/phone), валидация и кнопка «Оплатить».
   - `HeaderView` — индикатор количества товаров в корзине.
@@ -125,3 +125,141 @@ API_ORIGIN="https://your.api.host" npm run start
 - «Компонент `BasketView` показывает позиции, генерирует события удаления `basket:remove` и перехода к оформлению `order:open`».
 
 ---
+
+## Публичный API (классы и интерфейсы)
+
+### EventEmitter (брокер событий)
+- Конструктор: `new EventEmitter()`
+- Поля:
+  - `_events: Map<EventName, Set<Subscriber>>`
+- Методы:
+  - `on<T>(event: EventName, callback: (data: T) => void): void`
+  - `off(event: EventName, callback: Subscriber): void`
+  - `emit<T>(event: string, data?: T): void`
+  - `onAll(callback: (event: { eventName: string; data: unknown }) => void): void`
+  - `offAll(): void`
+  - `trigger<T>(event: string, context?: Partial<T>): (data: T) => void`
+
+### Api (HTTP‑клиент)
+- Конструктор: `new Api(baseUrl: string, options?: RequestInit)`
+- Поля:
+  - `baseUrl: string`
+  - `options: RequestInit`
+- Методы:
+  - `get<T>(uri: string): Promise<T>`
+  - `post<T>(uri: string, data: object, method?: ApiPostMethod): Promise<T>`
+
+### CatalogModel (модель каталога)
+- Конструктор: `new CatalogModel({ api, events, cdnOrigin }:
+  { api: IShopApi; events: IEvents; cdnOrigin?: string })`
+- Поля:
+  - `products: Product[]`
+  - `isLoading: boolean`
+  - `selectedProductId?: string`
+- Методы:
+  - `load(): Promise<void>`
+  - `selectProduct(id: string): void`
+
+### BasketModel (модель корзины)
+- Конструктор: `new BasketModel({ events }: { events: IEvents })`
+- Поля:
+  - `items: BasketItem[]`
+  - `total: number` (getter)
+  - `count: number` (getter)
+- Методы:
+  - `add(product: Product): void`
+  - `remove(productId: string): void`
+  - `clear(): void`
+
+### OrderModel (модель оформления)
+- Конструктор: `new OrderModel({ api, events }: { api: IShopApi; events: IEvents })`
+- Поля:
+  - `payment?: PaymentMethod`
+  - `address?: string`
+  - `email?: string`
+  - `phone?: string`
+  - `total: number` (getter)
+- Методы:
+  - `setPayment(method: PaymentMethod): void`
+  - `setAddress(value: string): void`
+  - `setContacts(data: { email?: string; phone?: string }): void`
+  - `attachBasket(basket: IBasketModel): void`
+  - `validate(): ValidationResult`
+  - `toRequestDTO(): OrderRequestDTO`
+
+### AppState (координатор приложения)
+- Конструктор: `new AppState({ events, api, catalog, basket, order }:
+  { events: IEvents; api: IShopApi; catalog: ICatalogModel; basket: IBasketModel; order: IOrderModel })`
+- Поля:
+  - `events: IEvents`
+  - `api: IShopApi`
+  - `catalog: ICatalogModel`
+  - `basket: IBasketModel`
+  - `order: IOrderModel`
+- Методы:
+  - `init(): Promise<void>`
+
+### GalleryView (галерея каталога)
+- Конструктор: `new GalleryView({ root, events }: { root: HTMLElement; events: IEvents })`
+- Поля:
+  - `element: HTMLElement`
+- Методы:
+  - `setItems(items: ProductViewModel[]): void`
+  - `render(data?: ProductViewModel[]): void`
+- События UI: делегирует клики карточек (см. `CardView`).
+
+### CardView (карточка товара / элемент корзины)
+- Конструктор: `new CardView({ element, events }: { element: HTMLElement; events: IEvents })`
+- Поля:
+  - `element: HTMLElement`
+- Методы:
+  - `setData(data: ProductViewModel): void`
+  - `setInBasket?(inBasket: boolean): void`
+- События UI:
+  - В каталоге/превью: `card:select`, `card:add-to-basket`
+  - В корзине (компактный вид): `basket:remove` — удаление айтема инициируется именно `CardView`
+
+### ModalView (модальное окно)
+- Конструктор: `new ModalView({ container, events }: { container: HTMLElement; events: IEvents })`
+- Поля:
+  - `element: HTMLElement`
+- Методы:
+  - `setContent(content: HTMLElement): void`
+  - `open(): void`
+  - `close(): void`
+- События UI: `modal:open`, `modal:close`
+
+### BasketView (контейнер корзины)
+- Конструктор: `new BasketView({ container, events }: { container: HTMLElement; events: IEvents })`
+- Поля:
+  - `element: HTMLElement`
+- Методы:
+  - `setItems(items: BasketItemViewModel[]): void`
+  - `setTotal(totalLabel: string): void`
+- Ответственность: отображает список, итог и кнопку «Оформить». Удаление айтема — зона `CardView`.
+
+### OrderFormView (форма адреса/оплаты)
+- Конструктор: `new OrderFormView({ form, events }: { form: HTMLFormElement; events: IEvents })`
+- Методы:
+  - `setPayment(method: PaymentMethod): void`
+  - `setAddress(address: string): void`
+  - `setValid(valid: boolean): void`
+  - `setErrors(errors: ValidationErrors): void`
+- События UI: `order:update`
+
+### ContactsFormView (форма контактов)
+- Конструктор: `new ContactsFormView({ form, events }: { form: HTMLFormElement; events: IEvents })`
+- Методы:
+  - `setEmail(email: string): void`
+  - `setPhone(phone: string): void`
+  - `setValid(valid: boolean): void`
+  - `setErrors(errors: ValidationErrors): void`
+- События UI: `contacts:update`
+
+### HeaderView (шапка)
+- Конструктор: `new HeaderView({ element, events }: { element: HTMLElement; events: IEvents })`
+- Методы:
+  - `setBasketCounter(count: number): void`
+- События UI: `basket:open` (по клику на иконку корзины)
+
+> Полные определения типов и payload’ов событий смотрите в `src/types/index.ts`.
