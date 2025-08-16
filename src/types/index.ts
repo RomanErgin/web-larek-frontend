@@ -18,12 +18,10 @@ export interface BasketItem {
 export type PaymentMethod = 'card' | 'cash';
 
 export interface Order {
-	items: BasketItem[];
 	payment: PaymentMethod;
 	address: string;
 	email: string;
 	phone: string;
-	total: number;
 }
 
 // API DTO
@@ -173,7 +171,6 @@ export interface IOrderModel {
 	address?: string;
 	email?: string;
 	phone?: string;
-	readonly total: number;
 	setPayment(method: PaymentMethod): void;
 	setAddress(value: string): void;
 	setContacts(data: { email?: string; phone?: string }): void;
@@ -231,6 +228,10 @@ export interface IContactsFormView extends IView<void> {
 	setPhone(phone: string): void;
 	setValid(valid: boolean): void;
 	setErrors(errors: ValidationErrors): void;
+}
+
+export interface ISuccessView extends IView<void> {
+	setTotal(totalLabel: string): void;
 }
 
 export interface IHeaderView extends IView<void> {
