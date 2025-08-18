@@ -1,0 +1,9 @@
+export { View } from './base/View';
+export { GalleryView } from './GalleryView';
+export { CardView } from './CardView';
+export { ModalView } from './ModalView';
+export { BasketView } from './BasketView';
+export { OrderFormView } from './OrderFormView';
+export { ContactsFormView } from './ContactsFormView';
+export { SuccessView } from './SuccessView';
+export { HeaderView } from './HeaderView';

@@ -15,7 +15,7 @@ export interface BasketItem {
 	quantity: number;
 }
 
-export type PaymentMethod = 'card' | 'cash';
+export type PaymentMethod = 'card' | 'cash' | 'online';
 
 export interface Order {
 	payment: PaymentMethod;
@@ -36,6 +36,7 @@ export interface OrderRequestDTO {
 	address: string;
 	email: string;
 	phone: string;
+	total?: number;
 }
 
 export interface OrderResponseDTO {
@@ -150,11 +151,11 @@ export interface ValidationResult {
 
 // Интерфейсы моделей (данные/состояние)
 export interface ICatalogModel {
-	products: Product[];
-	isLoading: boolean;
-	selectedProductId?: string;
 	load(): Promise<void>;
 	selectProduct(id: string): void;
+	getProducts(): Product[];
+	getProductById(id: string): Product | undefined;
+	isLoading(): boolean;
 }
 
 export interface IBasketModel {
@@ -174,7 +175,7 @@ export interface IOrderModel {
 	setPayment(method: PaymentMethod): void;
 	setAddress(value: string): void;
 	setContacts(data: { email?: string; phone?: string }): void;
-	attachBasket(basket: IBasketModel): void;
+	attachBasket(basketItems: BasketItem[]): void;
 	validate(): ValidationResult;
 	toRequestDTO(): OrderRequestDTO;
 }
