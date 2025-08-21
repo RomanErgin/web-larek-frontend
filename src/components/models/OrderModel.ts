@@ -26,19 +26,19 @@ export class OrderModel extends Model<OrderData> {
 
     setPayment(method: PaymentMethod): void {
         this.setData({ ...this.data, payment: method });
-        this.validateAndEmit();
+        this.validateOrderStepAndEmit();
     }
 
     setAddress(value: string): void {
         this.setData({ ...this.data, address: value });
-        this.validateAndEmit();
+        this.validateOrderStepAndEmit();
     }
 
     setContacts(data: { email?: string; phone?: string }): void {
-        this.setData({ 
-            ...this.data, 
-            email: data.email,
-            phone: data.phone
+        this.setData({
+            ...this.data,
+            email: data.email !== undefined ? data.email : this.data.email,
+            phone: data.phone !== undefined ? data.phone : this.data.phone
         });
         this.validateAndEmit();
     }
@@ -75,10 +75,46 @@ export class OrderModel extends Model<OrderData> {
         return { valid, errors };
     }
 
+    validateOrderStep(): ValidationResult {
+        const errors: ValidationErrors = {};
+
+        // Проверка способа оплаты
+        if (!this.data.payment) {
+            errors.payment = 'Выберите способ оплаты';
+        }
+
+        // Проверка адреса
+        if (!this.data.address || this.data.address.trim().length === 0) {
+            errors.address = 'Введите адрес доставки';
+        }
+
+        const valid = Object.keys(errors).length === 0;
+
+        return { valid, errors };
+    }
+
+    validateContactsStep(): ValidationResult {
+        const errors: ValidationErrors = {};
+
+        // Проверка email
+        if (!this.data.email || !this.isValidEmail(this.data.email)) {
+            errors.email = 'Введите корректный email';
+        }
+
+        // Проверка телефона
+        if (!this.data.phone || !this.isValidPhone(this.data.phone)) {
+            errors.phone = 'Введите корректный номер телефона';
+        }
+
+        const valid = Object.keys(errors).length === 0;
+
+        return { valid, errors };
+    }
+
     toRequestDTO(): OrderRequestDTO {
         const total = this.basketItems.reduce((sum, item) => {
             const price = item.product.price ?? 0;
-            return sum + price * item.quantity;
+            return sum + price; // Убрано умножение на quantity
         }, 0);
 
         // Бэкенд в некоторых стендах ожидает 'online' вместо 'card'
@@ -112,7 +148,19 @@ export class OrderModel extends Model<OrderData> {
 
     private validateAndEmit(): void {
         const validation = this.validate();
-        this.emit('order:update', {
+        this.emit('order:changed', {
+            payment: this.data.payment,
+            address: this.data.address,
+            email: this.data.email,
+            phone: this.data.phone,
+            valid: validation.valid,
+            errors: validation.errors
+        });
+    }
+
+    private validateOrderStepAndEmit(): void {
+        const validation = this.validateOrderStep();
+        this.emit('order:changed', {
             payment: this.data.payment,
             address: this.data.address,
             email: this.data.email,

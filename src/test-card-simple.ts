@@ -55,7 +55,10 @@ function testCardViewSimple() {
     
     // Тест 1: Отображение обычного товара
     console.log('\n📦 Тест 1: Отображение обычного товара');
-    cardView.setData(testProductData);
+    cardView.render({
+        product: testProductData,
+        inBasket: false
+    });
     
     // Проверяем, что данные отображаются
     setTimeout(() => {
@@ -69,7 +72,10 @@ function testCardViewSimple() {
         
         // Тест 2: Отображение бесплатного товара
         console.log('\n🎁 Тест 2: Отображение бесплатного товара');
-        cardView.setData(testFreeProductData);
+        cardView.render({
+            product: testFreeProductData,
+            inBasket: false
+        });
         
         setTimeout(() => {
             const newTitleElement = cardContainer.querySelector('.card__title');
@@ -81,7 +87,10 @@ function testCardViewSimple() {
             // Тест 3: Проверка обновления данных
             console.log('\n🔄 Тест 3: Проверка обновления данных');
             const updatedData = { ...testProductData, title: 'Обновленный товар' };
-            cardView.setData(updatedData);
+            cardView.render({
+                product: updatedData,
+                inBasket: false
+            });
             
             setTimeout(() => {
                 const updatedTitleElement = cardContainer.querySelector('.card__title');

@@ -7,6 +7,7 @@ import { OrderModel } from './components/models/OrderModel';
 import { AppState } from './components/models/AppState';
 import { GalleryView, ModalView, HeaderView, CardView, BasketView, OrderFormView, ContactsFormView, SuccessView } from './components/views';
 import { ensureElement, cloneTemplate } from './utils/utils';
+import { Product, PaymentMethod, ValidationErrors } from './types';
 
 // Инициализация инфраструктуры
 const events = new EventsAdapter();
@@ -37,13 +38,29 @@ const modalView = new ModalView({ container: modalEl, events });
 let currentScreen: 'catalog' | 'preview' | 'basket' | 'order' | 'contacts' | 'success' = 'catalog';
 let currentModalContent: HTMLElement | null = null;
 
+// Кэш для представлений форм
+let currentOrderFormView: OrderFormView | null = null;
+let currentContactsFormView: ContactsFormView | null = null;
+
+// Вспомогательная функция для создания состояния корзины
+function createBasketStates(): Map<string, boolean> {
+    const basketStates = new Map<string, boolean>();
+    catalog.getAllProductViewModels().forEach(productVM => {
+        basketStates.set(productVM.id, basket.isInBasket(productVM.id));
+    });
+    return basketStates;
+}
+
 function openPreview(productId: string) {
     const product = catalog.getProductById(productId);
     if (!product) return;
     const vm = catalog.toProductViewModel(product);
     const container = document.createElement('div');
     const cardView = new CardView({ element: container, events, context: 'preview' });
-    cardView.setData(vm);
+    cardView.render({
+        product: vm,
+        inBasket: basket.isInBasket(productId)
+    });
     currentModalContent = cardView.getElement();
     modalView.setContent(currentModalContent);
     modalView.open();
@@ -63,13 +80,17 @@ function openBasket() {
 
 function openOrder() {
     const formEl = cloneTemplate<HTMLFormElement>('#order');
-    const orderView = new OrderFormView({ form: formEl, events });
-    // Проставляем текущее состояние (если было)
-    const payment = order.getPayment?.();
-    const address = order.getAddress?.();
-    if (payment) orderView.setPayment(payment);
-    if (address) orderView.setAddress(address);
-    currentModalContent = orderView.getElement();
+    currentOrderFormView = new OrderFormView({ form: formEl, events });
+    
+    // Рендерим форму с текущими данными из модели
+    currentOrderFormView.render({
+        payment: order.getPayment(),
+        address: order.getAddress() || '',
+        valid: order.validateOrderStep().valid,
+        errors: order.validateOrderStep().errors
+    });
+    
+    currentModalContent = currentOrderFormView.getElement();
     modalView.setContent(currentModalContent);
     modalView.open();
     currentScreen = 'order';
@@ -77,8 +98,17 @@ function openOrder() {
 
 function openContacts() {
     const formEl = cloneTemplate<HTMLFormElement>('#contacts');
-    const contactsView = new ContactsFormView({ form: formEl, events });
-    currentModalContent = contactsView.getElement();
+    currentContactsFormView = new ContactsFormView({ form: formEl, events });
+    
+    // Рендерим форму с текущими данными из модели
+    currentContactsFormView.render({
+        email: order.getEmail() || '',
+        phone: order.getPhone() || '',
+        valid: order.validateContactsStep().valid,
+        errors: order.validateContactsStep().errors
+    });
+    
+    currentModalContent = currentContactsFormView.getElement();
     modalView.setContent(currentModalContent);
     modalView.open();
     currentScreen = 'contacts';
@@ -98,20 +128,80 @@ function openSuccess(total: number, orderId: string) {
 // Глобальные события UI → экраны
 events.on('app:ready', () => {
     headerView.render();
-    galleryView.setItems(catalog.getAllProductViewModels());
+    galleryView.render({
+        items: catalog.getAllProductViewModels(),
+        basketStates: createBasketStates()
+    });
     currentScreen = 'catalog';
 });
 
 events.on('card:select', ({ id }: { id: string }) => openPreview(id));
+events.on('card:toggle-basket', ({ product }: { product: Product }) => {
+    basket.toggle(product);
+    
+    // Обновляем карточку в галерее
+    const productVM = catalog.toProductViewModel(product);
+    galleryView.updateCard(product.id, productVM, basket.isInBasket(product.id));
+    
+    // Если открыто превью этого товара, обновляем его тоже
+    if (currentScreen === 'preview') {
+        openPreview(product.id);
+    }
+});
 events.on('basket:open', () => openBasket());
 events.on('order:open', () => openOrder());
+
+// Обработка обновления заказа (только обновление модели)
+events.on('order:update', (data: Partial<{ payment: PaymentMethod; address: string }>) => {
+    if (data.payment) {
+        order.setPayment(data.payment);
+    }
+    if (data.address !== undefined) {
+        order.setAddress(data.address);
+    }
+});
+
+// Обработка изменения заказа (обновление UI)
+events.on('order:changed', (data: { payment?: PaymentMethod; address?: string; email?: string; phone?: string; valid: boolean; errors: ValidationErrors }) => {
+    // Если открыта форма заказа, обновляем её
+    if (currentScreen === 'order' && currentOrderFormView) {
+        currentOrderFormView.render({
+            payment: data.payment,
+            address: data.address || '',
+            valid: data.valid,
+            errors: data.errors
+        });
+    }
+});
 
 // После валидного оформления заказа переключаемся на форму контактов
 events.on('order:submit', () => openContacts());
 
+// Обработка обновления контактов
+events.on('contacts:update', (data: { email?: string; phone?: string }) => {
+    order.setContacts(data);
+    
+    // Если открыта форма контактов, обновляем её
+    if (currentScreen === 'contacts' && currentContactsFormView) {
+        currentContactsFormView.render({
+            email: order.getEmail() || '',
+            phone: order.getPhone() || '',
+            valid: order.validateContactsStep().valid,
+            errors: order.validateContactsStep().errors
+        });
+    }
+});
+
 // События модели → обновление UI
 events.on('basket:changed', () => {
     headerView.setBasketCounter(basket.count);
+    
+    // Полностью перерендериваем галерею с новым состоянием корзины
+    galleryView.render({
+        items: catalog.getAllProductViewModels(),
+        basketStates: createBasketStates()
+    });
+    
     if (currentScreen === 'basket' && currentModalContent) {
         openBasket();
     }
@@ -123,6 +213,8 @@ events.on('order:success', ({ orderId, total }: { orderId: string; total: number
 
 events.on('modal:close', () => {
     currentModalContent = null;
+    currentOrderFormView = null;
+    currentContactsFormView = null;
     currentScreen = 'catalog';
 });
 

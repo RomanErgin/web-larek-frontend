@@ -2,9 +2,12 @@ import { View } from './base/View';
 import { ProductViewModel, IEvents } from '../../types';
 import { cloneTemplate } from '../../utils/utils';
 
-export class CardView extends View<ProductViewModel> {
-    private data: ProductViewModel | null = null;
-    private inBasket: boolean = false;
+interface CardViewData {
+    product: ProductViewModel;
+    inBasket: boolean;
+}
+
+export class CardView extends View<CardViewData> {
     private context: 'catalog' | 'preview' | 'basket' = 'catalog';
 
     constructor({ element, events, context = 'catalog' }: { 
@@ -16,18 +19,8 @@ export class CardView extends View<ProductViewModel> {
         this.context = context;
     }
 
-    setData(data: ProductViewModel): void {
-        this.data = data;
-        this.render();
-    }
-
-    setInBasket(inBasket: boolean): void {
-        this.inBasket = inBasket;
-        this.render();
-    }
-
-    render(): void {
-        if (!this.data) return;
+    render(data: CardViewData): void {
+        if (!data?.product) return;
 
         // Выбираем подходящий шаблон в зависимости от контекста
         let templateId: string;
@@ -52,42 +45,51 @@ export class CardView extends View<ProductViewModel> {
         const textElement = cardElement.querySelector('.card__text');
 
         if (categoryElement) {
-            categoryElement.textContent = this.data.categoryLabel;
-            categoryElement.className = `card__category card__category_${this.data.categoryClass}`;
+            categoryElement.textContent = data.product.categoryLabel;
+            categoryElement.className = `card__category card__category_${data.product.categoryClass}`;
         }
         
         if (titleElement) {
-            titleElement.textContent = this.data.title;
+            titleElement.textContent = data.product.title;
         }
         
         if (imageElement) {
-            imageElement.src = this.data.imageUrl;
-            imageElement.alt = this.data.title;
+            imageElement.src = data.product.imageUrl;
+            imageElement.alt = data.product.title;
         }
         
         if (priceElement) {
-            priceElement.textContent = this.data.priceLabel;
+            priceElement.textContent = data.product.priceLabel;
         }
 
         // Добавляем обработчики событий в зависимости от контекста
         if (this.context === 'catalog' || this.context === 'preview') {
             // Клик по карточке для предпросмотра
             cardElement.addEventListener('click', () => {
-                this.events.emit('card:select', { id: this.data!.id });
+                this.events.emit('card:select', { id: data.product.id });
             });
 
-            // Кнопка "В корзину" для покупаемых товаров
-            if (this.data.isBuyable) {
+            // Кнопка для покупаемых товаров
+            if (data.product.isBuyable) {
                 const button = cardElement.querySelector('.card__button') as HTMLButtonElement;
                 if (button) {
+                    // Обновляем текст кнопки в зависимости от состояния корзины
+                    if (data.inBasket) {
+                        button.textContent = 'Убрать из корзины';
+                        button.classList.add('card__button--remove');
+                    } else {
+                        button.textContent = 'В корзину';
+                        button.classList.remove('card__button--remove');
+                    }
+
                     button.addEventListener('click', (e) => {
                         e.stopPropagation();
-                        this.events.emit('card:add-to-basket', { 
+                        this.events.emit('card:toggle-basket', { 
                             product: {
-                                id: this.data!.id,
-                                title: this.data!.title,
-                                price: this.data!.priceLabel === 'Бесценно' ? null : parseFloat(this.data!.priceLabel.replace(/\D/g, '')),
-                                image: this.data!.imageUrl
+                                id: data.product.id,
+                                title: data.product.title,
+                                price: data.product.priceLabel === 'Бесценно' ? null : parseFloat(data.product.priceLabel.replace(/\D/g, '')),
+                                image: data.product.imageUrl
                             }
                         });
                     });
@@ -98,7 +100,7 @@ export class CardView extends View<ProductViewModel> {
             const deleteButton = cardElement.querySelector('.basket__item-delete') as HTMLButtonElement;
             if (deleteButton) {
                 deleteButton.addEventListener('click', () => {
-                    this.events.emit('basket:remove', { id: this.data!.id });
+                    this.events.emit('basket:remove', { id: data.product.id });
                 });
             }
         }

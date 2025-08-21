@@ -107,7 +107,7 @@ API_ORIGIN="https://your.api.host" npm run start
 ### Данные и типы 
 Основные сущности: 
 - `Product`: id, title, description, category, image, price. 
-- `BasketItem`: product + quantity. 
+- `BasketItem`: product. 
 - `Order`: items, payment, address, email, phone, total. 
  
 См. `src/types/index.ts` для полной типизации (экспорт интерфейсов и алиасов). 

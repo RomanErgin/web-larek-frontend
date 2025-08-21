@@ -12,7 +12,6 @@ export interface Product {
 
 export interface BasketItem {
 	product: Product;
-	quantity: number;
 }
 
 export type PaymentMethod = 'card' | 'cash' | 'online';
@@ -79,6 +78,7 @@ export type AppEvent =
 	| 'catalog:error'
 	| 'card:select'
 	| 'card:add-to-basket'
+	| 'card:toggle-basket'
 	| 'basket:add'
 	| 'basket:remove'
 	| 'basket:open'
@@ -87,6 +87,7 @@ export type AppEvent =
 	| 'modal:close'
 	| 'order:open'
 	| 'order:update'
+	| 'order:changed'
 	| 'order:submit'
 	| 'order:success'
 	| 'order:error'
@@ -102,6 +103,7 @@ export interface AppEventPayloadMap {
 	'catalog:error': { message: string };
 	'card:select': { id: string };
 	'card:add-to-basket': { product: Product };
+	'card:toggle-basket': { product: Product };
 	'basket:add': { product: Product };
 	'basket:remove': { id: string };
 	'basket:open': void;
@@ -110,6 +112,7 @@ export interface AppEventPayloadMap {
 	'modal:close': void;
 	'order:open': void;
 	'order:update': Partial<Order>;
+	'order:changed': { payment?: PaymentMethod; address?: string; email?: string; phone?: string; valid: boolean; errors: ValidationErrors };
 	'order:submit': OrderRequestDTO;
 	'order:success': { orderId: string; total: number };
 	'order:error': { message: string };
@@ -156,6 +159,7 @@ export interface ICatalogModel {
 	getProducts(): Product[];
 	getProductById(id: string): Product | undefined;
 	isLoading(): boolean;
+	getAllProductViewModels(): ProductViewModel[];
 }
 
 export interface IBasketModel {
@@ -165,6 +169,8 @@ export interface IBasketModel {
 	add(product: Product): void;
 	remove(productId: string): void;
 	clear(): void;
+	toggle(product: Product): void;
+	isInBasket(productId: string): boolean;
 }
 
 export interface IOrderModel {
@@ -177,6 +183,8 @@ export interface IOrderModel {
 	setContacts(data: { email?: string; phone?: string }): void;
 	attachBasket(basketItems: BasketItem[]): void;
 	validate(): ValidationResult;
+	validateOrderStep(): ValidationResult;
+	validateContactsStep(): ValidationResult;
 	toRequestDTO(): OrderRequestDTO;
 }
 
@@ -197,13 +205,11 @@ export interface IView<TData = unknown> {
 	hide(): void;
 }
 
-export interface IGalleryView extends IView<ProductViewModel[]> {
-	setItems(items: ProductViewModel[]): void;
+export interface IGalleryView extends IView<{ items: ProductViewModel[]; basketStates: Map<string, boolean> }> {
+	updateCard(productId: string, product: ProductViewModel, inBasket: boolean): void;
 }
 
-export interface ICardView extends IView<ProductViewModel> {
-	setData(data: ProductViewModel): void;
-	setInBasket?(inBasket: boolean): void;
+export interface ICardView extends IView<{ product: ProductViewModel; inBasket: boolean }> {
 }
 
 export interface IModalView extends IView<void> {
@@ -217,18 +223,10 @@ export interface IBasketView extends IView<BasketItemViewModel[]> {
 	setTotal(totalLabel: string): void;
 }
 
-export interface IOrderFormView extends IView<void> {
-	setPayment(method: PaymentMethod): void;
-	setAddress(address: string): void;
-	setValid(valid: boolean): void;
-	setErrors(errors: ValidationErrors): void;
+export interface IOrderFormView extends IView<{ payment?: PaymentMethod; address: string; valid: boolean; errors: ValidationErrors }> {
 }
 
-export interface IContactsFormView extends IView<void> {
-	setEmail(email: string): void;
-	setPhone(phone: string): void;
-	setValid(valid: boolean): void;
-	setErrors(errors: ValidationErrors): void;
+export interface IContactsFormView extends IView<{ email: string; phone: string; valid: boolean; errors: ValidationErrors }> {
 }
 
 export interface ISuccessView extends IView<void> {

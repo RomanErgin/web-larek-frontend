@@ -20,13 +20,12 @@ export class BasketModel extends Model<BasketData> {
         const existingItem = this.data.items.find(item => item.product.id === product.id);
         
         if (existingItem) {
-            // Увеличиваем количество существующего товара
-            existingItem.quantity += 1;
+            // Если товар уже в корзине, ничего не делаем
+            return;
         } else {
             // Добавляем новый товар
             this.data.items.push({
-                product,
-                quantity: 1
+                product
             });
         }
 
@@ -36,6 +35,18 @@ export class BasketModel extends Model<BasketData> {
             count: this.count,
             total: this.total
         });
+    }
+
+    toggle(product: Product): void {
+        const existingItem = this.data.items.find(item => item.product.id === product.id);
+        
+        if (existingItem) {
+            // Если товар уже в корзине, удаляем его
+            this.remove(product.id);
+        } else {
+            // Если товара нет в корзине, добавляем его
+            this.add(product);
+        }
     }
 
     remove(productId: string): void {
@@ -57,12 +68,16 @@ export class BasketModel extends Model<BasketData> {
         });
     }
 
+    isInBasket(productId: string): boolean {
+        return this.data.items.some(item => item.product.id === productId);
+    }
+
     get items(): BasketItem[] {
         return this.data.items;
     }
 
     get count(): number {
-        return this.data.items.reduce((sum, item) => sum + item.quantity, 0);
+        return this.data.items.length; // Изменено: теперь считаем количество уникальных товаров
     }
 
     get total(): number {
@@ -71,7 +86,7 @@ export class BasketModel extends Model<BasketData> {
             if (price === null || price === undefined) {
                 return sum; // Бесплатные товары не учитываются в общей сумме
             }
-            return sum + (price * item.quantity);
+            return sum + price; // Убрано умножение на quantity
         }, 0);
     }
 

@@ -1,74 +1,48 @@
 import { View } from './base/View';
 import { ProductViewModel, IEvents } from '../../types';
 import { cloneTemplate } from '../../utils/utils';
+import { CardView } from './CardView';
 
-export class GalleryView extends View<ProductViewModel[]> {
-    private items: ProductViewModel[] = [];
+interface GalleryViewData {
+    items: ProductViewModel[];
+    basketStates: Map<string, boolean>;
+}
+
+export class GalleryView extends View<GalleryViewData> {
+    private cardViews: Map<string, CardView> = new Map();
 
     constructor({ root, events }: { root: HTMLElement; events: IEvents }) {
         super({ element: root, events });
     }
 
-    setItems(items: ProductViewModel[]): void {
-        this.items = items;
-        this.render();
-    }
-
-    render(): void {
+    render(data: GalleryViewData): void {
         this.element.innerHTML = '';
+        this.cardViews.clear();
         
-        this.items.forEach((item) => {
+        data.items.forEach((item) => {
             const cardElement = cloneTemplate<HTMLElement>('#card-catalog');
+            const cardView = new CardView({ element: cardElement, events: this.events, context: 'catalog' });
             
-            // Заполняем данные карточки
-            const categoryElement = cardElement.querySelector('.card__category');
-            const titleElement = cardElement.querySelector('.card__title');
-            const imageElement = cardElement.querySelector('.card__image') as HTMLImageElement;
-            const priceElement = cardElement.querySelector('.card__price');
-
-            if (categoryElement) {
-                categoryElement.textContent = item.categoryLabel;
-                categoryElement.className = `card__category card__category_${item.categoryClass}`;
-            }
+            // Сохраняем ссылку на CardView для последующего обновления
+            this.cardViews.set(item.id, cardView);
             
-            if (titleElement) {
-                titleElement.textContent = item.title;
-            }
-            
-            if (imageElement) {
-                imageElement.src = item.imageUrl;
-                imageElement.alt = item.title;
-            }
-            
-            if (priceElement) {
-                priceElement.textContent = item.priceLabel;
-            }
-
-            // Добавляем обработчики событий
-            cardElement.addEventListener('click', () => {
-                this.events.emit('card:select', { id: item.id });
+            // Рендерим карточку с данными и состоянием корзины
+            cardView.render({
+                product: item,
+                inBasket: data.basketStates.get(item.id) || false
             });
-
-            // Если товар можно купить, добавляем кнопку "В корзину"
-            if (item.isBuyable) {
-                const button = document.createElement('button');
-                button.className = 'button card__button';
-                button.textContent = 'В корзину';
-                button.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    this.events.emit('card:add-to-basket', { 
-                        product: {
-                            id: item.id,
-                            title: item.title,
-                            price: item.priceLabel === 'Бесценно' ? null : parseFloat(item.priceLabel.replace(/\D/g, '')),
-                            image: item.imageUrl
-                        }
-                    });
-                });
-                cardElement.appendChild(button);
-            }
-
+            
             this.element.appendChild(cardElement);
         });
+    }
+
+    updateCard(productId: string, product: ProductViewModel, inBasket: boolean): void {
+        const cardView = this.cardViews.get(productId);
+        if (cardView) {
+            cardView.render({
+                product,
+                inBasket
+            });
+        }
     }
 }
